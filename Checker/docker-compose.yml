@@ -1,0 +1,16 @@
+version: "3"
+
+services:
+  checkerserver:
+    image: checker:latest
+    ports:
+      - 3356:3356
+    restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - DOCKER_HOST=tcp://host.docker.internal:2375
+      - DOCKER_TEMP=/tmp
+      - STARTER_TEMP=/tmp
+    volumes:
+      - /tmp:/tmp 
