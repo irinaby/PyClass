@@ -1,0 +1,94 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{31f56971-33e6-4c3b-b023-0caa49aa2608}</ProjectGuid>
+    <ProjectHome />
+    <StartupFile>manage.py</StartupFile>
+    <SearchPath />
+    <WorkingDirectory>.</WorkingDirectory>
+    <OutputPath>.</OutputPath>
+    <ProjectTypeGuids>{5F0BE9CA-D677-4A4D-8806-6076C0FAAD37};{349c5851-65df-11da-9384-00065b846f21};{888888a0-9f3d-457c-b088-3a5042f75d52}</ProjectTypeGuids>
+    <LaunchProvider>Django launcher</LaunchProvider>
+    <InterpreterId>Global|PythonCore|3.9</InterpreterId>
+    <WebBrowserUrl>http://localhost/pyclass</WebBrowserUrl>
+    <DjangoSettingsModule>DjangoSite.settings</DjangoSettingsModule>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'" />
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'" />
+  <PropertyGroup>
+    <VisualStudioVersion Condition=" '$(VisualStudioVersion)' == '' ">10.0</VisualStudioVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Checker\images\checker\src\main.py" />
+    <Compile Include="Checker\images\checker\src\starter.py" />
+    <Compile Include="DjangoSite\asgi.py" />
+    <Compile Include="DjangoSite\settings.py" />
+    <Compile Include="DjangoSite\urls.py" />
+    <Compile Include="DjangoSite\wsgi.py" />
+    <Compile Include="DjangoSite\__init__.py" />
+    <Compile Include="manage.py" />
+    <Compile Include="PyClass\admin.py" />
+    <Compile Include="PyClass\apps.py" />
+    <Compile Include="PyClass\forms.py" />
+    <Compile Include="PyClass\migrations\__init__.py" />
+    <Compile Include="PyClass\models.py" />
+    <Compile Include="PyClass\tests.py" />
+    <Compile Include="PyClass\urls.py" />
+    <Compile Include="PyClass\views.py" />
+    <Compile Include="PyClass\__init__.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="PyClass\templates\PyClass\index.html" />
+    <Content Include="PyClass\templates\PyClass\register.html" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Checker\" />
+    <Folder Include="Checker\images\" />
+    <Folder Include="Checker\images\checker\" />
+    <Folder Include="Checker\images\checker\src" />
+    <Folder Include="DjangoSite" />
+    <Folder Include="PyClass" />
+    <Folder Include="PyClass\migrations" />
+    <Folder Include="PyClass\templates\" />
+    <Folder Include="PyClass\templates\PyClass" />
+  </ItemGroup>
+  <ItemGroup>
+    <InterpreterReference Include="Global|PythonCore|3.9" />
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.Django.targets" />
+  <ProjectExtensions>
+    <VisualStudio>
+      <FlavorProperties GUID="{349c5851-65df-11da-9384-00065b846f21}">
+        <WebProjectProperties>
+          <AutoAssignPort>True</AutoAssignPort>
+          <UseCustomServer>True</UseCustomServer>
+          <CustomServerUrl>http://localhost</CustomServerUrl>
+          <SaveServerSettingsInUserFile>False</SaveServerSettingsInUserFile>
+        </WebProjectProperties>
+      </FlavorProperties>
+      <FlavorProperties GUID="{349c5851-65df-11da-9384-00065b846f21}" User="">
+        <WebProjectProperties>
+          <StartPageUrl>
+          </StartPageUrl>
+          <StartAction>CurrentPage</StartAction>
+          <AspNetDebugging>True</AspNetDebugging>
+          <SilverlightDebugging>False</SilverlightDebugging>
+          <NativeDebugging>False</NativeDebugging>
+          <SQLDebugging>False</SQLDebugging>
+          <ExternalProgram>
+          </ExternalProgram>
+          <StartExternalURL>
+          </StartExternalURL>
+          <StartCmdLineArguments>
+          </StartCmdLineArguments>
+          <StartWorkingDirectory>
+          </StartWorkingDirectory>
+          <EnableENC>False</EnableENC>
+          <AlwaysStartWebServerOnDebug>False</AlwaysStartWebServerOnDebug>
+        </WebProjectProperties>
+      </FlavorProperties>
+    </VisualStudio>
+  </ProjectExtensions>
+</Project>
