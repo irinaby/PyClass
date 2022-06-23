@@ -1,12 +1,7 @@
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
-
-from requests import JSONDecodeError
 import starter
-from io import BytesIO
 import logging
-import threading
-import uuid
 
 logger = logging.getLogger("checker")
 logging.basicConfig()
@@ -61,9 +56,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             logger.info(self.path + ", Content-Length=" + str(content_length))
 
             input = json.loads(body)
-            input["uid"] = str(uuid.uuid4())
-            starter.task_add(input)
-            self.send_text(200, input["uid"])
+            uid = starter.task_add(input)
+            self.send_text(200, uid)
 
         except json.decoder.JSONDecodeError as e:
             logger.error("json error: " + body.decode("utf-8"))
