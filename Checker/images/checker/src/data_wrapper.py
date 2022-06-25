@@ -29,7 +29,7 @@ class Wrapper(WrapperInterface):
             return dotnet
         elif lang in ["py", "python"]:
             return python
-        elif lang in ["c"]:
+        elif lang in ["c", "cpp", "c++"]:
             return gcc
         else:
             raise Exception('Unknown language "' + lang + '"')

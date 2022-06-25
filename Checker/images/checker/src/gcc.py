@@ -2,6 +2,17 @@ from globals import *
 from docker.types import Mount
 
 def prepare_build(options: dict, name: str) -> bool:
+    language = options[LANGUAGE]
+    
+    if language == "c":
+        file_ext = ".c"
+        compiler = "gcc"
+    elif language in ["cpp", "c++"]:
+        file_ext = ".cpp"
+        compiler = "g++"
+    else:
+        raise Exception('Unknown language: "' + language + '"')
+
     options["image_name"] = "gcc:builder"
 
     options[MOUNTS] = mounts = []
@@ -14,11 +25,11 @@ def prepare_build(options: dict, name: str) -> bool:
 
     bin_path = path_join(starter_tmp, name)
     os.makedirs(bin_path)
-    filename = "main.c"
+    filename = "main" + file_ext
     with open(path_join(bin_path, filename), "x", newline="\n") as f:
         f.write(options[SOURCE])
 
-    cmd_debug(cmd, "gcc -o " + name + "/" + name + " " + name + "/" + filename)
+    cmd_debug(cmd, compiler + " -o " + name + "/" + name + " " + name + "/" + filename)
     cmd.append("retVal=$?")
     cmd.append("if [ $retVal -ne 0 ]; then")
     cmd.append("  exit $retVal")
