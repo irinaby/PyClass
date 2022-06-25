@@ -9,31 +9,41 @@ def make_samples() -> list:
         samples.append(str(random.randint(1, 1000)) + " " + str(random.randint(1, 1000)))
     return samples
 
-def test(lang: str, testee_filename: str, checker_filename: str) -> dict:
+def test(lang: str, filename: str) -> dict:
     data = {
-        "language": lang
+        "language": lang,
+        "timeout": 2,
+        "mem_limit": "100m"
     }
-
-    data["timeout"] = 2
-    data["checker_timeout"] = 4
-    data["mem_limit"] = "100m"
-
-    with open(testee_filename, "r") as f:
-        data["testee"] = f.read()
-    with open(checker_filename, "r") as f:
-        data["checker"] = f.read()
-    data["samples"] = make_samples()
+    with open(filename, "r") as f:
+        data["source"] = f.read()
 
     return data
 
 
 def test_py(testee_filename: str, checker_filename: str) -> dict:
-    return test("py", testee_filename, checker_filename)
+    return {
+        "testee": test("py", testee_filename),
+        "checker": test("py", checker_filename),
+        "samples": make_samples()
+    }
 
 def test_cs(testee_filename: str, checker_filename: str) -> dict:
-    return test("cs", testee_filename, checker_filename)
+    return {
+        "testee": test("C#", testee_filename),
+        "checker": test("C#", checker_filename),
+        "samples": make_samples()
+    }
 
-data = test_py("py/test_summa_user.py", "py/test_summa_check.py")
+def test_c(testee_filename: str, checker_filename: str) -> dict:
+    return {
+        "testee": test("c", testee_filename),
+        "checker": test("py", "py/test_summa_check.py"),
+        "samples": make_samples()
+    }
+
+data = test_c("c/testee.c", "c/checker.c")
+#data = test_py("py/test_summa_user.py", "py/test_summa_check.py")
 #data = test_cs("cs/summa_user.cs", "cs/summa_check.cs")
 # with open("data_cs.json", "w") as f:
 #     json.dump(data, f)

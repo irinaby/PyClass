@@ -2,6 +2,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 import starter
 import logging
+import check_json
 
 logger = logging.getLogger("checker")
 logging.basicConfig()
@@ -56,9 +57,13 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             logger.info(self.path + ", Content-Length=" + str(content_length))
 
             input = json.loads(body)
+            check_json.check(input)
             uid = starter.task_add(input)
             self.send_text(200, uid)
 
+        except check_json.CheckJsonException as e:
+            logger.error("json error: " + e.message)
+            self.send_text(500, "json error: " + e.message)
         except json.decoder.JSONDecodeError as e:
             logger.error("json error: " + body.decode("utf-8"))
             self.send_text(500, "json parsing error: pos=" + str(e.pos) + ", line=" + str(e.lineno) + ", col=" + str(e.colno))
