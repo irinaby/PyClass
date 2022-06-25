@@ -120,7 +120,7 @@ class Wrapper(WrapperInterface):
         finally:
             self.lock.release()
 
-    def get(self):
+    def get(self) -> WrapperInterface:
         self.lock.acquire()
         try:
             self.result[STATUS] = self.status_prefix + self.status

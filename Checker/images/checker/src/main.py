@@ -33,12 +33,12 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 if len(paths) == 2:
                     if paths[0] == "result":
                         uid = paths[1]
-                        result = starter.task_get(uid)
-                        if result == None:
+                        task = starter.task_get(uid)
+                        if task == None:
                             self.send_text(400, uid + " not found")
                             return
                         else:
-                            self.send_json(result)
+                            self.send_json(task.get())
                             return
                     #
                 self.send_text(400, "wait /result/f50ec0b7-f960-400d-91f0-c42a6d44e3d0")
