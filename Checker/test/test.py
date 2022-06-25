@@ -33,8 +33,8 @@ def test_py(testee_filename: str, checker_filename: str) -> dict:
 def test_cs(testee_filename: str, checker_filename: str) -> dict:
     return test("cs", testee_filename, checker_filename)
 
-#data = test_py("test_summa_user.py", "test_summa_check.py")
-data = test_cs("cs/summa_user.cs", "cs/summa_check.cs")
+data = test_py("py/test_summa_user.py", "py/test_summa_check.py")
+#data = test_cs("cs/summa_user.cs", "cs/summa_check.cs")
 # with open("data_cs.json", "w") as f:
 #     json.dump(data, f)
 payload = json.dumps(data)# + "--"

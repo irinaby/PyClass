@@ -17,7 +17,7 @@ logging.basicConfig()
 logger.setLevel(logging.DEBUG)
 logger.info("init")
 
-MAX_CONTAINERS = 5
+MAX_CONTAINERS = int(os.environ.get("MAX_CONTAINERS", "4"))
 LANGUAGE = "language"
 RESULT = "result"
 UID = "uid"
@@ -129,7 +129,7 @@ class Runner:
                             result["time_avg"] += t
                 else:
                     errors.append(line)
-        result["output"] = "\n".join(lines)
+        result["output"] = "\n".join(lines).replace("debug: ", "")
         result["errors"] = "\n".join(errors)
         if result["run_samples"] > 0:
             result["mem_avg"] = result["mem_avg"] / result["run_samples"]
@@ -173,7 +173,7 @@ class Runner:
 
             lines = []
             for line in out:
-                logger.debug(line.decode("utf-8").rstrip())
+                logger.debug(line.decode("utf-8").rstrip().replace("debug: ", ""))
                 lines.append(line.decode("utf-8"))
                 result = parse_output(lines)
                 result[RESULT] = running_result
@@ -299,7 +299,9 @@ class Runner:
                 mounts.append(Mount(path_join("/usr/src", filename), path_join(docker_tmp, filename), type="bind", read_only=True))
                 data[CHECKER_CMD] = "python " + filename
 
-            return self.run_check(data)
+            result = self.run_check(data)
+            logger.debug(result)
+            return result
         pass
 
     def build_dotnet(self, data: dict, lang, file_ext: str) -> dict:

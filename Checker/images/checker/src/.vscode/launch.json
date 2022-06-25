@@ -12,6 +12,7 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "env": {
+                "MAX_CONTAINERS": "2",
                 "DOCKER_TEMP": "F:/temp",
                 "STARTER_TEMP": "F:/temp"
             }
