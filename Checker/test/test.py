@@ -39,15 +39,14 @@ data = test_cs("cs/summa_user.cs", "cs/summa_check.cs")
 #     json.dump(data, f)
 payload = json.dumps(data)# + "--"
 start = time.perf_counter()
-r = requests.post("http://192.168.0.22:3356", data=payload)
-#r = requests.post("http://localhost:3356", data=payload)
+#r = requests.post("http://192.168.0.22:3356", data=payload)
+r = requests.post("http://localhost:3356", data=payload)
 print(time.perf_counter() - start)
 print(r.status_code, r.reason)
+print(r.text)
 try:
-    print(r.text)
     d = json.loads(r.text)
     print(d["result"])
     print(d["output"])
 except Exception as e:
-    print(r.text)
     print(e)

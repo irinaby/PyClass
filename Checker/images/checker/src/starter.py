@@ -1,3 +1,4 @@
+from sre_constants import SUCCESS
 from time import sleep
 from tkinter import EXCEPTION
 import docker
@@ -17,15 +18,30 @@ logger.setLevel(logging.DEBUG)
 logger.info("init")
 
 MAX_CONTAINERS = 5
+LANGUAGE = "language"
+RESULT = "result"
+UID = "uid"
+MEM_LIMIT = "mem_limit"
+MOUNTS = "mounts"
+TESTEE_CMD = "testee_cmd"
+CHECKER_CMD = "checker_cmd"
+TESTEE_SOURCE = "testee_source"
+CHECKER_SOURCE = "checker_source"
+READONLY = "read_only"
+
 TESTEE = "testee"
 CHECKER = "checker"
 DOCKER_TEMP = "docker_temp"
 STARTER_TEMP = "starter_temp"
 
+# Results:
 STARTING = "starting"
 RUNNING = "running"
 REQUEST_ERROR = "request_error"
 EXCEPTION = "exception"
+SUCCESS = "success"
+
+
 
 def exception_str(e: BaseException) -> str:
     tb = traceback.TracebackException.from_exception(e)
@@ -33,6 +49,10 @@ def exception_str(e: BaseException) -> str:
 
 def path_join(path: str, filename: str) -> str:
     return os.path.join(path, filename).replace("\\", "/")
+
+def cmd_debug(cmd: list, command: str):
+    cmd.append('echo "debug: ' + command.replace('"', '\\"') + '"')
+    cmd.append(command)
 
 class TemporaryDirectory:
     def __init__(self, data: dict) -> None:
@@ -70,8 +90,7 @@ class Runner:
         finally:
             self.lock.release()
 
-    def parse_output(self, lines: list) -> dict:
-        #print(lines)
+    def parse_check(self, lines: list) -> dict:
         result = dict(        
             run_samples = 0,
             last_sample = 0,
@@ -117,27 +136,35 @@ class Runner:
             result["time_avg"] = result["time_avg"] / result["run_samples"]
         return result
 
-    def run_container(self, data: dict, mounts: list) -> dict:
-        logger.debug(data)
-        
+    def parse_build(self, lines: list) -> dict:
+        return {
+            "output": "\n".join(lines)
+        }
+
+    def run_container(self, data: dict, parse_output, running_result: str) -> dict:
+        mounts = data.get(MOUNTS, [])
+        mem_limit = data.get(MEM_LIMIT) or None
+        memswap_limit = data.get("memswap_limit") or None
+        read_only = data.get(READONLY, False)
+
         client = docker.from_env()
         kwargs = {
             #"auto_remove": True,
-            "mounts": mounts,
-            "mem_limit": data["mem_limit"],
-            "memswap_limit": 0,
+            MOUNTS: mounts,
+            MEM_LIMIT: mem_limit,
+            "memswap_limit": memswap_limit,
             "pids_limit": -1,
             "tty": False,
             "stdin_open": False,
-            #"read_only": True,
+            READONLY: read_only,
             "entrypoint": ["bash"],
             "network_disabled": True,
             "working_dir": "/usr/src"
         }
         container = None
         try:
-            container = client.containers.create(data["image_name"], command=["run.sh"], **kwargs)
-            logger.info(container.name)
+            container = client.containers.create(data["image_name"], command=data["command"], **kwargs)
+            logger.info("image: " + data["image_name"] + ", container: " + container.name)
             container.start()
 
             out = container.logs(
@@ -146,38 +173,37 @@ class Runner:
 
             lines = []
             for line in out:
+                logger.debug(line.decode("utf-8").rstrip())
                 lines.append(line.decode("utf-8"))
-                result = self.parse_output(lines)
-                result["result"] = RUNNING
-                self.update(data["uid"], result)
+                result = parse_output(lines)
+                result[RESULT] = running_result
+                self.update(data[UID], result)
 
             container.reload() # обновляет container.attrs
             container_state = container.attrs["State"]
-            #print("ExitCode:", container_state["ExitCode"])
-            #print(result)
-            result = self.parse_output(lines)
-            exitCode = container_state["ExitCode"]
-            if exitCode == 0:
-                result["result"] = "success"
-            elif exitCode == 124:
-                result["result"] = "timeout"
-            elif exitCode == 200:
-                result["result"] = "check_error"
-            elif exitCode == 224:
-                result["result"] = "check_timeout"
-            elif exitCode == 300:
-                result["result"] = "build_testee_error"
-            elif exitCode == 301:
-                result["result"] = "build_checker_error"
-            else:
-                result["result"] = "error"
-
+            result = parse_output(lines)
             if container_state["OOMKilled"] == True:
-                result["result"] = "out_of_memory"
+                result[RESULT] = "out_of_memory"
+            else:
+                exitCode = container_state["ExitCode"]
 
-            logger.info("finished: " + data["uid"] + ", " + result["result"])
-            self.update(data["uid"], result)
-            return result
+                if exitCode == 0:
+                    result[RESULT] = SUCCESS
+                elif exitCode == 124:
+                    result[RESULT] = "timeout"
+                elif exitCode == 200:
+                    result[RESULT] = "check_error"
+                elif exitCode == 224:
+                    result[RESULT] = "check_timeout"
+                elif exitCode == 300:
+                    result[RESULT] = "build_testee_error"
+                elif exitCode == 301:
+                    result[RESULT] = "build_checker_error"
+                else:
+                    result[RESULT] = "error"
+
+            self.update(data[UID], result)
+            return result[RESULT]
         finally:
             if not container is None:
                 container.reload()
@@ -189,24 +215,17 @@ class Runner:
                 container.remove()
         pass
 
-    def prepare_mounts(self, data) -> dict:
-        mounts = []
+    def run_check(self, data) -> dict:
+        data[MOUNTS] = mounts = data.get(MOUNTS, [])
 
         docker_tmp = data[DOCKER_TEMP]
         starter_tmp = data[STARTER_TEMP]
-        mounts.append(Mount("/usr/src", docker_tmp, type="bind", read_only=False))
+        wrk_tmp = path_join(starter_tmp, "wrk")
+        os.makedirs(wrk_tmp)
+        mounts.append(Mount("/usr/src", wrk_tmp, type="bind", read_only=False))
 
-        filename = data["testee_filename"]
-        with open(path_join(starter_tmp, filename), "x", newline="\n") as f:
-            f.write(data["testee_source"])
-            mounts.append(Mount(path_join("/usr/src", filename), path_join(docker_tmp, filename), type="bind", read_only=True))
-
-        filename = data["checker_filename"]
-        with open(path_join(starter_tmp, filename), "x", newline="\n") as f:
-            f.write(data["checker_source"])
-            mounts.append(Mount(path_join("/usr/src", filename), path_join(docker_tmp, filename), type="bind", read_only=True))
-
-        cmd = data["commands"]
+        cmd = ["#!/bin/bash"]
+        data["commands"] = cmd
         i = 0
         for sample in data["samples"]:
             sample_name = "sample" + f"{i:02}.txt"
@@ -215,17 +234,15 @@ class Runner:
                 mounts.append(Mount(path_join("/usr/src", sample_name), path_join(docker_tmp, sample_name), type="bind", read_only=True))
 
             cmd.append("echo \"sample: " + str(i) + "\"")
-            #cmd.append("cp " + sample_name + " input.txt")
-            cmd.append("ln -sf " + sample_name + " input.txt")
-            cmd.append("cat input.txt | time --format=\"mem: %M;time: %e\" --output=stats.txt -q timeout " + str(data["timeout"]) + " " + data["testee_cmd"] + " >> output.txt")
+            cmd_debug(cmd, "ln -sf " + sample_name + " input.txt")
+            cmd_debug(cmd, "cat input.txt | time --format=\"mem: %M;time: %e\" --output=stats.txt -q timeout " + str(data["timeout"]) + " " + data[TESTEE_CMD] + " >> output.txt")
             cmd.append("retVal=$?")
             cmd.append("cat stats.txt")
             cmd.append("if [ $retVal -ne 0 ]; then")
             cmd.append("  echo \"user error\"")
             cmd.append("  exit $retVal")
             cmd.append("fi")
-            #cmd.append("cp " + sample_name + " input.txt")
-            cmd.append("timeout " + str(data["timeout"]) + " " + data["checker_cmd"])
+            cmd_debug(cmd, "timeout " + str(data["checker_timeout"]) + " " + data[CHECKER_CMD])
             cmd.append("retVal=$?")
             cmd.append("if [ $retVal -eq 124 ]; then")
             cmd.append("  exit 224")
@@ -238,21 +255,23 @@ class Runner:
             i += 1
 
         s = "\n".join(cmd)
-        with open(path_join(starter_tmp, "run.sh"), "x", newline="\n") as f:
+        command_filename = "check.sh"
+        with open(path_join(starter_tmp, command_filename), "x", newline="\n") as f:
             f.write(s)
-            mounts.append(Mount(path_join("/usr/src", "run.sh"), path_join(docker_tmp, "run.sh"), type="bind", read_only=True))
+            mounts.append(Mount(path_join("/usr/src", command_filename), path_join(docker_tmp, command_filename), type="bind", read_only=True))
+        data["command"] = command_filename
+        data[READONLY] = True
+        return self.run_container(data, self.parse_check, RUNNING)
         
-        return self.run_container(data, mounts)
-
     def init_data(self, input: dict) -> dict:
         data = {}
-        data["uid"] = input["uid"]
+        data[UID] = input[UID]
         data["timeout"] = input.get("timeout", 10)
         data["checker_timeout"] = input.get("checker_timeout", data["timeout"])
-        data["mem_limit"] = input.get("mem_limit", "100m")
+        data[MEM_LIMIT] = input.get(MEM_LIMIT, "100m")
 
-        data["testee_source"] = input["testee"]
-        data["checker_source"] = input["checker"]
+        data[TESTEE_SOURCE] = input["testee"]
+        data[CHECKER_SOURCE] = input["checker"]
         data["samples"] = input["samples"]
         data["commands"] = ["#!/bin/bash"]
 
@@ -261,87 +280,135 @@ class Runner:
     def run_python(self, input: dict) -> dict:
         data = self.init_data(input)
         data["image_name"] = "python:checker"
-        data["testee_filename"] = TESTEE + ".py"
-        data["testee_cmd"] = "python " + data["testee_filename"]
-        data["checker_filename"] = CHECKER + ".py"
-        data["checker_cmd"] = "python " + data["checker_filename"]
 
         with TemporaryDirectory(data):
-            return self.prepare_mounts(data)
+            docker_tmp = data[DOCKER_TEMP]
+            starter_tmp = data[STARTER_TEMP]
+
+            data[MOUNTS] = mounts = []
+
+            filename = TESTEE + ".py"
+            with open(path_join(starter_tmp, filename), "x", newline="\n") as f:
+                f.write(data[TESTEE_SOURCE])
+                mounts.append(Mount(path_join("/usr/src", filename), path_join(docker_tmp, filename), type="bind", read_only=True))
+                data[TESTEE_CMD] = "python " + filename
+
+            filename = CHECKER + ".py"
+            with open(path_join(starter_tmp, filename), "x", newline="\n") as f:
+                f.write(data[CHECKER_SOURCE])
+                mounts.append(Mount(path_join("/usr/src", filename), path_join(docker_tmp, filename), type="bind", read_only=True))
+                data[CHECKER_CMD] = "python " + filename
+
+            return self.run_check(data)
         pass
 
-    def run_dotnet(self, input: dict, lang: str, file_ext: str) -> dict:
+    def build_dotnet(self, data: dict, lang, file_ext: str) -> dict:
+        data["image_name"] = "dotnet:builder"
+
+        data[MOUNTS] = mounts = []
+
+        cmd = ["#!/bin/bash"]
+        data["commands"] = cmd
+
+        docker_tmp = data[DOCKER_TEMP]
+        starter_tmp = data[STARTER_TEMP]
+        mounts.append(Mount("/usr/src", docker_tmp, type="bind", read_only=False))
+
+        testee_filename = TESTEE + file_ext
+        with open(path_join(starter_tmp, testee_filename), "x", newline="\n") as f:
+            f.write(data[TESTEE_SOURCE])
+
+        checker_filename = CHECKER + file_ext
+        with open(path_join(starter_tmp, checker_filename), "x", newline="\n") as f:
+            f.write(data[CHECKER_SOURCE])
+
+        testee_prj = TESTEE
+        cmd_debug(cmd, "dotnet new console -o " + testee_prj)
+        cmd_debug(cmd, "cp " + testee_filename + " " + path_join(testee_prj, "Program" + file_ext))
+        cmd_debug(cmd, "dotnet build --configuration Release --no-restore -v q " + testee_prj)
+        cmd.append("retVal=$?")
+        cmd.append("if [ $retVal -ne 0 ]; then")
+        cmd.append("  exit 300")
+        cmd.append("fi")
+        cmd.append('echo "debug: testee build success"')
+        data["testee_bin"] = path_join(testee_prj, "bin/Release/net6.0")
+
+        checker_prj = CHECKER
+        cmd_debug(cmd, "dotnet new console -o " + checker_prj)
+        cmd_debug(cmd, "cp " + checker_filename + " " + path_join(checker_prj, "Program" + file_ext))
+        cmd_debug(cmd, "dotnet build --configuration Release --no-restore -v q " + checker_prj)
+        cmd.append("retVal=$?")
+        cmd.append("if [ $retVal -ne 0 ]; then")
+        cmd.append("  exit 301")
+        cmd.append("fi")
+        cmd.append('echo "debug: checker build success"')
+        data["checker_bin"] = path_join(checker_prj, "bin/Release/net6.0")
+
+        s = "\n".join(cmd)
+        command_filename = "build.sh"
+        with open(path_join(starter_tmp, command_filename), "x", newline="\n") as f:
+            f.write(s)
+        data["command"] = command_filename
+
+        return self.run_container(data, self.parse_build, "build")
+
+    def run_dotnet(self, input: dict, lang: str, file_ext: str):
         data = self.init_data(input)
-        data["image_name"] = "dotnet:checker"
-        data["testee_filename"] = TESTEE + file_ext
-        data["checker_filename"] = CHECKER + file_ext
 
         with TemporaryDirectory(data):
-            cmd = data["commands"]
-            testee_prj = TESTEE
-            cmd.append("dotnet new console -o " + testee_prj)
-            #cmd.append("sleep 1000000")
-            cmd.append("cp " + data["testee_filename"] + " " + path_join(testee_prj, "Program" + file_ext))
-            cmd.append("dotnet build --no-restore -v q " + testee_prj)
-            cmd.append("retVal=$?")
-            cmd.append("if [ $retVal -ne 0 ]; then")
-            cmd.append("  exit 300")
-            cmd.append("fi")
-            cmd.append('echo "debug: testee build success"')
-            data["testee_cmd"] = "dotnet " + path_join(testee_prj, "bin/Debug/net6.0/" + TESTEE + ".dll")
-
-            checker_prj = CHECKER
-            cmd.append("dotnet new console -o " + checker_prj)
-            cmd.append("cp " + data["checker_filename"] + " " + path_join(checker_prj, "Program" + file_ext))
-            cmd.append("dotnet build --no-restore -v q " + checker_prj)
-            cmd.append("retVal=$?")
-            cmd.append("if [ $retVal -ne 0 ]; then")
-            cmd.append("  exit 301")
-            cmd.append("fi")
-            cmd.append('echo "debug: checker build success"')
-            #cmd.append('sleep 1000000')
-            data["checker_cmd"] = "dotnet " + path_join(checker_prj, "bin/Debug/net6.0/" + CHECKER + ".dll")
-
-            return self.prepare_mounts(data)
+            data[MEM_LIMIT] = None
+            result = self.build_dotnet(data, lang, file_ext)
+            logger.debug(result)
+            if result == SUCCESS:
+                data["image_name"] = "dotnet:runtime"
+                data[MEM_LIMIT] = input.get(MEM_LIMIT, "100m")
+                docker_tmp = data[DOCKER_TEMP]
+                data[MOUNTS] = mounts = []
+                mounts.append(Mount(path_join("/usr/src", TESTEE), path_join(docker_tmp, data["testee_bin"]), type="bind", read_only=True))
+                data[TESTEE_CMD] = "dotnet " + path_join(TESTEE, TESTEE + ".dll")
+                mounts.append(Mount(path_join("/usr/src", CHECKER), path_join(docker_tmp, data["checker_bin"]), type="bind", read_only=True))
+                data[CHECKER_CMD] = "dotnet " + path_join(CHECKER, CHECKER + ".dll")
+                result = self.run_check(data)
+                logger.debug(result)
         pass
 
-    def run_cs(self, input: dict) -> dict:
-        return self.run_dotnet(input, "C#", ".cs")
+    def run_cs(self, input: dict):
+        self.run_dotnet(input, "C#", ".cs")
     
-    def run_fs(self, input: dict) -> dict:
-        return self.run_dotnet(input, "F#", ".fs")
+    def run_fs(self, input: dict):
+        self.run_dotnet(input, "F#", ".fs")
 
     def run_vb(self, input: dict) -> dict:
-        return self.run_dotnet(input, "VB", ".vb")
+        self.run_dotnet(input, "VB", ".vb")
 
     def run_safe(self, input: dict):
         try:
-            if input["language"] == "python":
+            if input[LANGUAGE] == "python":
                 self.run_python(input)
-            elif input["language"] == "py":
+            elif input[LANGUAGE] == "py":
                 self.run_python(input)
-            elif input["language"] == "cs":
+            elif input[LANGUAGE] == "cs":
                 self.run_cs(input)
-            elif input["language"] == "c#":
+            elif input[LANGUAGE] == "c#":
                 self.run_cs(input)
-            elif input["language"] == "f#":
+            elif input[LANGUAGE] == "f#":
                 self.run_fs(input)
-            elif input["language"] == "vb":
+            elif input[LANGUAGE] == "vb":
                 self.run_vb(input)
             else:
-                self.update(input["uid"], {
-                    "result": REQUEST_ERROR,
-                    "error": "Unknown language: " + input["language"],
+                self.update(input[UID], {
+                    RESULT: REQUEST_ERROR,
+                    "error": "Unknown language: " + input[LANGUAGE],
                 })
         except Exception as e:
             logger.exception(e)
-            self.update(input["uid"], {
-                "result": EXCEPTION,
+            self.update(input[UID], {
+                RESULT: EXCEPTION,
                 "error": exception_str(e),
             })
 
-    def run_thread(self, input: dict) -> dict:
-        input["result"] = RUNNING
+    def run_thread(self, input: dict):
+        input[RESULT] = RUNNING
         t = threading.Thread(target=self.run_safe, args=[input])
         t.start()
 
@@ -349,13 +416,13 @@ class Runner:
         cnt = 0
         for key in self.tasks:
             task = self.tasks[key]
-            if task["result"] == RUNNING:
+            if task[RESULT] == RUNNING:
                 cnt += 1
             pass
         pass
         for key in self.tasks:
             task = self.tasks[key]
-            if task["result"] == STARTING:
+            if task[RESULT] == STARTING:
                 if cnt < MAX_CONTAINERS:
                     self.run_thread(task)
                     cnt += 1
@@ -367,14 +434,14 @@ class Runner:
     def add(self, input: dict):
         self.lock.acquire()
         try:
-            input["uid"] = str(uuid.uuid4())
+            input[UID] = str(uuid.uuid4())
 
-            input["result"] = STARTING
+            input[RESULT] = STARTING
             input["created"] = datetime.now()
-            self.tasks[input["uid"]] = input
+            self.tasks[input[UID]] = input
 
             self.tasks_run()
-            return input["uid"]
+            return input[UID]
         finally:
             self.lock.release()
 
