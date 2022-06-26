@@ -7,6 +7,8 @@ import checker
 import dotnet
 import python
 import gcc
+import nodejs
+import freepascal
 
 logger = log("task")
 
@@ -31,6 +33,10 @@ class Wrapper(WrapperInterface):
             return python
         elif lang in ["c", "cpp", "c++"]:
             return gcc
+        elif lang in ["js", "javascript"]:
+            return nodejs
+        elif lang in ["pas"]:
+            return freepascal
         else:
             raise Exception('Unknown language "' + lang + '"')
 

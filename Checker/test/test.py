@@ -37,12 +37,28 @@ def test_cs(testee_filename: str, checker_filename: str) -> dict:
 
 def test_c(testee_filename: str, checker_filename: str) -> dict:
     return {
-        "testee": test("c", testee_filename),
+        "testee": test("c++", testee_filename),
         "checker": test("py", "py/test_summa_check.py"),
         "samples": make_samples()
     }
 
-data = test_c("c/testee.c", "c/checker.c")
+def test_js(testee_filename: str) -> dict:
+    return {
+        "testee": test("js", testee_filename),
+        "checker": test("py", "py/test_summa_check.py"),
+        "samples": make_samples()
+    }
+
+def test_pas(testee_filename: str) -> dict:
+    return {
+        "testee": test("pas", testee_filename),
+        "checker": test("py", "py/test_summa_check.py"),
+        "samples": make_samples()
+    }
+
+data = test_pas("pas/summa.pas")
+#data = test_js("js/summa.js")
+#data = test_c("c/testee.c", "c/checker.c")
 #data = test_py("py/test_summa_user.py", "py/test_summa_check.py")
 #data = test_cs("cs/summa_user.cs", "cs/summa_check.cs")
 # with open("data_cs.json", "w") as f:
